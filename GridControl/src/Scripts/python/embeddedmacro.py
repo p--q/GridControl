@@ -73,10 +73,10 @@ def createDialog(ctx, smgr, doc, flg):
 	menulistener = MenuListener(grid1)  # ポップアップメニューにつけるメニューリスナーを取得。
 	items = ("~Cut", 0, {"setCommand": "cut"}),\
 			("Cop~y", 0, {"setCommand": "copy"}),\
-			("~Paste", 0, {"setCommand": "paste"}),\
+			("~Paste to New Rows", 0, {"setCommand": "paste"}),\
 			(),\
-			("~Insert", 0, {"setCommand": "insert"}),\
-			("~Delete", 0, {"setCommand": "delete"})  # グリッドコントロールにつける右クリックメニュー。
+			("~Insert Empty Rows", 0, {"setCommand": "insert"}),\
+			("~Delete Selected Rows", 0, {"setCommand": "delete"})  # グリッドコントロールにつける右クリックメニュー。
 	popupmenu = menuCreator(ctx, smgr)("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
 	mouselister = MouseListener(doc, menulistener)
 	grid1.addMouseListener(mouselister)
@@ -167,20 +167,18 @@ class MenuListener(unohelper.Base, XMenuListener):
 	def itemSelected(self, menuevent):  # PopupMenuの項目がクリックされた時。
 		gridcontrol = self.gridcontrol
 		griddata = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModelを取得。
+		selectedrows = gridcontrol.getSelectedRows()  # 選択状態の行インデックスのタプルを取得。
 		cmd = menuevent.Source.getCommand(menuevent.MenuId)
 		if cmd=="cut":
 			
 			
-			# インデックスの取得も必要。間隔だけの取得？
-			
-			
-			selectedrows = gridcontrol.getSelectedRows()
+
 			self.rowdata = [griddata.getRowData(r) for r in selectedrows]
 			[griddata.removeRow(r) for r in selectedrows]
-		elif cmd=="copy":
+		elif cmd=="copy":  
 			selectedrows = gridcontrol.getSelectedRows()
 			self.rowdata = [griddata.getRowData(r) for r in selectedrows]
-		elif cmd=="paste":
+		elif cmd=="paste":  # 取得時の行インデックスが飛び番の時はまとめてペーストする。
 			rowdata = self.rowdata
 			if rowdata:
 				selectedrows = gridcontrol.getSelectedRows()
@@ -189,10 +187,10 @@ class MenuListener(unohelper.Base, XMenuListener):
 						griddata.updateRowData( , row, )
 				
 				
-		elif cmd=="insert":
+		elif cmd=="insert":  # 空行を挿入。
 			pass
-		elif cmd=="delete":
-			pass
+		elif cmd=="delete":  # 選択状態の行を削除。
+			[griddata.removeRow(r) for r in selectedrows]
 	def itemActivated(self, menuevent):
 		pass
 	def itemDeactivated(self, menuevent):
