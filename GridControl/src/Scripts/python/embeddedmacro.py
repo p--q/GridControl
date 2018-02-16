@@ -73,7 +73,7 @@ def createDialog(ctx, smgr, doc, flg):
 	menulistener = MenuListener(grid1)  # ポップアップメニューにつけるメニューリスナーを取得。
 	items = ("~Cut", 0, {"setCommand": "cut"}),\
 			("Cop~y", 0, {"setCommand": "copy"}),\
-			("~Paste to New Rows", 0, {"setCommand": "paste"}),\
+			("~Paste on Successive New Rows", 0, {"setCommand": "paste"}),\
 			(),\
 			("~Insert Empty Rows", 0, {"setCommand": "insert"}),\
 			("~Delete Selected Rows", 0, {"setCommand": "delete"})  # グリッドコントロールにつける右クリックメニュー。
