@@ -78,7 +78,7 @@ def createDialog(ctx, smgr, doc, flg):
 			("~Insert Empty Rows", 0, {"setCommand": "insert"}),\
 			("~Delete Selected Rows", 0, {"setCommand": "delete"})  # グリッドコントロールにつける右クリックメニュー。
 	popupmenu = menuCreator(ctx, smgr)("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
-	mouselister = MouseListener(doc, menulistener)
+	mouselister = MouseListener(doc, popupmenu, menulistener)
 	grid1.addMouseListener(mouselister)
 	gridmodel = grid1.getModel()  # グリッドコントロールモデルの取得。
 	gridcolumn = gridmodel.getPropertyValue("ColumnModel")  # DefaultGridColumnModel
@@ -131,10 +131,10 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 	def disposing(self, eventobject):  
 		eventobject.Source.removeCloseListener(self)
 class MouseListener(unohelper.Base, XMouseListener):  
-	def __init__(self, doc, popupmenu): 
-		self.args = doc, popupmenu
+	def __init__(self, doc, popupmenu, menulistener): 
+		self.args = doc, popupmenu, menulistener
 	def mousePressed(self, mouseevent):
-		doc, popupmenu = self.args
+		doc, popupmenu, menulistener = self.args
 		gridcontrol = mouseevent.Source  # グリッドコントロールを取得。
 		if mouseevent.Buttons==MouseButton.LEFT and mouseevent.ClickCount==2:  # ダブルクリックの時。
 			selection = doc.getCurrentSelection()  # シート上で選択しているオブジェクトを取得。
@@ -148,6 +148,10 @@ class MouseListener(unohelper.Base, XMouseListener):
 				if not gridcontrol.isRowSelected(rowindex):  # クリックした位置の行が選択状態でない時。
 					gridcontrol.deselectAllRows()  # 行の選択状態をすべて解除する。
 					gridcontrol.selectRow(rowindex)  # 右クリックしたところの行を選択する。
+				if menulistener.rowdata:  # 保存しているデータがある時。
+					popupmenu.enableItem(3, True)  # インデックスは1から始まる。
+				else:
+					popupmenu.enableItem(3, False)
 				pos = Rectangle(mouseevent.X, mouseevent.Y, 0, 0)  # ポップアップメニューを表示させる起点。
 				popupmenu.execute(gridcontrol.getPeer(), pos, PopupMenuDirection.EXECUTE_DEFAULT)  # ポップアップメニューを表示させる。引数は親ピア、位置、方向			
 	def mouseReleased(self, mouseevent):
@@ -182,9 +186,9 @@ class MenuListener(unohelper.Base, XMenuListener):
 			rowdata = self.rowdata
 			if rowdata:
 				selectedrows = gridcontrol.getSelectedRows()
-				if len(rowdata)==len(selectedrows):
-					for row in rowdata:
-						griddata.updateRowData( , row, )
+# 				if len(rowdata)==len(selectedrows):
+# 					for row in rowdata:
+# 						griddata.updateRowData( , row, )
 				
 				
 		elif cmd=="insert":  # 空行を挿入。
@@ -207,7 +211,7 @@ def menuCreator(ctx, smgr):  #  メニューバーまたはポップアップメ
 				if len(item) > 2:  # タプルの要素が3以上のときは3番目の要素は適用するメソッドの辞書と考える。
 					item = list(item)
 					attr[i] = item.pop()  # メニュー項目のIDをキーとしてメソッド辞書に付け替える。
-				menu.insertItem(i, *item, i-1)  # ItemId, Text, ItemSytle, ItemPos。
+				menu.insertItem(i, *item, i-1)  # ItemId, Text, ItemSytle, ItemPos。ItemIdは1から始まり区切り線は含まない。
 			else:  # 空のタプルの時は区切り線と考える。
 				menu.insertSeparator(i)  # ItemPos 
 		if attr:  # メソッドの適用。
