@@ -103,7 +103,7 @@ def createDialog(ctx, smgr, doc, flg):
 	dialog.createPeer(toolkit, containerwindow)  # ダイアログを描画。親ウィンドウを渡す。ノンモダルダイアログのときはNone(デスクトップ)ではフリーズする。Stepを使うときはRoadmap以外のコントロールが追加された後にピアを作成しないとStepが重なって表示される。
 	if flg:  # ノンモダルダイアログにするとき。オートメーションでは動かない。
 		dialogframe = showModelessly(ctx, smgr, frame, dialog)  
-		args = menulistener, mouselistener
+		args = doc, menulistener, mouselistener
 		dialogframe.addCloseListener(CloseListener(args))  # CloseListener。ノンモダルダイアログのリスナー削除用。
 	else:  # モダルダイアログにする。フレームに追加するとエラーになる。
 		dialog.execute()  
@@ -116,12 +116,19 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 	def __init__(self, args):
 		self.args = args
 	def queryClosing(self, eventobject, getsownership):
-		menulistener, mouselistener = self.args
+		doc, menulistener, mouselistener = self.args
+		dialog = menulistener.dialog
+		gridcontrol = dialog.getControl("Grid1")	
+		gridmodel = gridcontrol.getModel()  # グリッドコントロールモデルの取得。	
+		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
+		
+		doc.getSheets()["config"]
+		
+		
 		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
 		mouselistener.editpopupmenu.removeMenuListener(menulistener)
 		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)
-		dialog = menulistener.dialog
-		dialog.getControl("Grid1").removeMouseListener(mouselistener)
+		gridcontrol.removeMouseListener(mouselistener)
 		dialog.getControl("Edit2").removeMouseListener(mouselistener)
 		dialog.getControl("Button1").removeMouseListener(mouselistener)
 		eventobject.Source.removeCloseListener(self)
@@ -142,7 +149,7 @@ class MouseListener(unohelper.Base, XMouseListener):
 		items = ("~Now", 0, {"setCommand": "now"}),  # テキストボックスコントロールにつける右クリックメニュー。
 		editpopupmenu = createMenu("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
 		self.editpopupmenu = editpopupmenu  # CloseListenerでも使う。		
-		items = ("~Resore", 0, {"setCommand": "undo"}),\
+		items = ("~Resore", 0, {"setCommand": "restore"}),\
 			(),\
 			("~Add", 0, {"setCommand": "add"}),\
 			("~Sort", 0, {"setCommand": "sort"})  # ボタンコントロールにつける右クリックメニュー。
@@ -214,6 +221,8 @@ class MenuListener(unohelper.Base, XMenuListener):
 	def itemSelected(self, menuevent):  # PopupMenuの項目がクリックされた時。どこのコントロールのメニューかを知る方法はない。
 		cmd = menuevent.Source.getCommand(menuevent.MenuId)
 		dialog = self.dialog
+		peer = dialog.getPeer()  # ピアを取得。
+		toolkit = peer.getToolkit()  # ピアからツールキットを取得。 
 		gridcontrol = dialog.getControl("Grid1")  # グリッドコントロールを取得。
 		selectedrows = gridcontrol.getSelectedRows()  # 選択行インデックスのタプルを取得。
 		griddata = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModelを取得。
@@ -228,8 +237,11 @@ class MenuListener(unohelper.Base, XMenuListener):
 			elif cmd=="pastebelow":  # 空行を選択行の下に挿入。  
 				insertRows(gridcontrol, griddata, selectedrows, 1, self.rowdata)
 			elif cmd=="delete":  # 選択行を削除する。  
-				[griddata.removeRow(r) for r in selectedrows]  # 選択行を削除。
-		elif cmd in ("add", "undo", "sort"):  # ボタンコントロールのコンテクストメニュー。
+				msg = "Delete selected row(s)?"
+				msgbox = toolkit.createMessageBox(peer, QUERYBOX, MessageBoxButtons.BUTTONS_YES_NO, "Delete", msg)
+				if msgbox.execute()==MessageBoxResults.YES:					
+					[griddata.removeRow(r) for r in selectedrows]  # 選択行を削除。
+		elif cmd in ("add", "restore", "sort"):  # ボタンコントロールのコンテクストメニュー。
 			if cmd=="add":
 				dialog = self.dialog  # ダイアログを取得。
 				t = dialog.getControl("Edit1").getText()
@@ -239,14 +251,15 @@ class MenuListener(unohelper.Base, XMenuListener):
 					selectedrows = griddata.RowCount-1,  # 最終行インデックスを選択していることにする。
 				insertRows(gridcontrol, griddata, selectedrows, 1, ((t, d),))  # 選択行の下に行を挿入する。
 			elif cmd=="sort":
-				griddata.sortByColumn(0, True)
-			elif cmd=="undo":
+				msg = "Sort in ascending order?"
+				msgbox = toolkit.createMessageBox(peer, QUERYBOX, MessageBoxButtons.BUTTONS_YES_NO, "Sort", msg)
+				if msgbox.execute()==MessageBoxResults.YES:				
+					griddata.sortByColumn(0, True)
+			elif cmd=="restore":
 				cellcursor, datarows = self.undo  # datarowsは1行しかないはず。
 				stringaddress = cellcursor.getPropertyValue("AbsoluteName").split(".")[1].replace("$", "")  # 前回入力した範囲の文字列アドレスを取得。
 				current = " ".join(cellcursor.getDataArray()[0])
 				restored = " ".join(datarows[0])
-				peer = dialog.getPeer()  # ピアを取得。
-				toolkit = peer.getToolkit()  # ピアからツールキットを取得。 
 				msg = """Restore the Value of {}?
 Current: {}
   After: {}""".format(stringaddress, current, restored)
