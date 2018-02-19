@@ -17,6 +17,7 @@ from com.sun.star.view.SelectionType import MULTI  # enum
 from com.sun.star.awt.MessageBoxType import QUERYBOX  # enum
 from com.sun.star.awt import MessageBoxButtons  # 定数
 from com.sun.star.awt import MessageBoxResults  # 定数
+from com.sun.star.awt.grid import XGridSelectionListener
 def macro(documentevent=None):  # 引数は文書のイベント駆動用。import pydevd; pydevd.settrace(stdoutToServer=True, stderrToServer=True)
 	ctx = XSCRIPTCONTEXT.getComponentContext()  # コンポーネントコンテクストの取得。
 	smgr = ctx.getServiceManager()  # サービスマネージャーの取得。
@@ -69,12 +70,12 @@ def createDialog(ctx, smgr, doc, flg):
 	grid = {"PositionX": m, "PositionY": m, "Width": 100, "Height": 50, "ShowRowHeader": False, "ShowColumnHeader": False, "SelectionModel": MULTI, "VScroll": True}  # グリッドコントロールの基本プロパティ。
 	textbox = {"PositionX": m, "PositionY": YHeight(grid, m), "Height": 12}  # テクストボックスコントロールの基本プロパティ。
 	button = {"PositionY": textbox["PositionY"]-1, "Width": 23, "Height":textbox["Height"]+2, "PushButtonType": 2}  # ボタンの基本プロパティ。PushButtonTypeの値はEnumではエラーになる。VerticalAlignではtextboxと高さが揃わない。
-	controldialog =  {"PositionX": 100, "PositionY": 40, "Width": grid["PositionX"]+grid["Width"]+m, "Title": "Grid Example", "Name": "controldialog", "Step": 0, "Moveable": True}  # コントロールダイアログの基本プロパティ。幅は右端のコントロールから取得。高さは最後に設定する。
+	controldialog =  {"PositionX": 100, "PositionY": 40, "Width": grid["PositionX"]+grid["Width"]+m, "Title": "Grid Example", "Name": "controldialog", "Moveable": True}  # コントロールダイアログの基本プロパティ。幅は右端のコントロールから取得。高さは最後に設定する。
 	dialog, addControl = dialogCreator(ctx, smgr, controldialog)  # コントロールダイアログの作成。
-	menulistener = MenuListener()
-	menulistener.dialog = dialog  # メニューリスナーにダイアログを渡す。
+	menulistener = MenuListener()  # コンテクストメニューのリスナー。
 	mouselistener = MouseListener(doc, menulistener, menuCreator(ctx, smgr))
-	gridcontrol1 = addControl("Grid", grid, {"addMouseListener": mouselistener})  # グリッドコントロールの取得。
+	gridselectionlistener = GridSelectionListener()
+	gridcontrol1 = addControl("Grid", grid, {"addMouseListener": mouselistener, "addSelectionListener": gridselectionlistener})  # グリッドコントロールの取得。
 	gridmodel = gridcontrol1.getModel()  # グリッドコントロールモデルの取得。
 	gridcolumn = gridmodel.getPropertyValue("ColumnModel")  # DefaultGridColumnModel
 	column0 = gridcolumn.createColumn()  # 列の作成。
@@ -101,15 +102,16 @@ def createDialog(ctx, smgr, doc, flg):
 	addControl("Button", button, {"addMouseListener": mouselistener})  
 	dialog.getModel().setPropertyValue("Height", YHeight(button, m))  # コントロールダイアログの高さを設定。
 	dialog.createPeer(toolkit, containerwindow)  # ダイアログを描画。親ウィンドウを渡す。ノンモダルダイアログのときはNone(デスクトップ)ではフリーズする。Stepを使うときはRoadmap以外のコントロールが追加された後にピアを作成しないとStepが重なって表示される。
+	menulistener.setDialog(dialog)
 	if flg:  # ノンモダルダイアログにするとき。オートメーションでは動かない。
 		dialogframe = showModelessly(ctx, smgr, frame, dialog)  
-		args = doc, menulistener, mouselistener
+		args = mouselistener, gridselectionlistener
 		dialogframe.addCloseListener(CloseListener(args))  # CloseListener。ノンモダルダイアログのリスナー削除用。
 	else:  # モダルダイアログにする。フレームに追加するとエラーになる。
 		dialog.execute()  
-# 		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
-# 		mouselistener.editpopupmenu.removeMenuListener(menulistener)
-# 		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)		
+		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
+		mouselistener.editpopupmenu.removeMenuListener(menulistener)
+		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)		
 		dialog.dispose()		
 def XWidth(props, m=0):  # 左隣のコントロールからPositionXを取得。mは間隔。
 	return props["PositionX"] + props["Width"] + m  	
@@ -119,8 +121,9 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 	def __init__(self, args):
 		self.args = args
 	def queryClosing(self, eventobject, getsownership):
-		doc, menulistener, mouselistener = self.args
-		dialog = menulistener.dialog
+		mouselistener, gridselectionlistener = self.args
+		doc, menulistener, gridpopupmenu, editpopupmenu, buttonpopupmenu = mouselistener.args
+		dialog = menulistener.args[0]
 		gridcontrol = dialog.getControl("Grid1")	
 		gridmodel = gridcontrol.getModel()  # グリッドコントロールモデルの取得。	
 		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
@@ -128,9 +131,10 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 # 		doc.getSheets()["config"]
 		
 		
-		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
-		mouselistener.editpopupmenu.removeMenuListener(menulistener)
-		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)
+		gridpopupmenu.removeMenuListener(menulistener)
+		editpopupmenu.removeMenuListener(menulistener)
+		buttonpopupmenu.removeMenuListener(menulistener)
+		gridcontrol.removeSelectionListener(gridselectionlistener)
 		gridcontrol.removeMouseListener(mouselistener)
 		dialog.getControl("Edit2").removeMouseListener(mouselistener)
 		dialog.getControl("Button1").removeMouseListener(mouselistener)
@@ -148,22 +152,18 @@ class MouseListener(unohelper.Base, XMouseListener):
 			(),\
 			("~Delete Selected Rows", 0, {"setCommand": "delete"})  # グリッドコントロールにつける右クリックメニュー。
 		gridpopupmenu = createMenu("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
-		self.gridpopupmenu = gridpopupmenu  # CloseListenerでも使う。
 		items = ("~Now", 0, {"setCommand": "now"}),  # テキストボックスコントロールにつける右クリックメニュー。
-		editpopupmenu = createMenu("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
-		self.editpopupmenu = editpopupmenu  # CloseListenerでも使う。		
+		editpopupmenu = createMenu("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  	
 		items = ("~Resore", 0, {"setCommand": "restore"}),\
 			(),\
 			("~Add", 0, {"setCommand": "add"}),\
 			("~Sort", 0, {"setCommand": "sort"})  # ボタンコントロールにつける右クリックメニュー。
 		buttonpopupmenu = createMenu("PopupMenu", items, {"addMenuListener": menulistener})  # 右クリックでまず呼び出すポップアップメニュー。  
-		self.buttonpopupmenu = buttonpopupmenu  # CloseListenerでも使う。
-		self.args = doc, menulistener
+		self.args = doc, menulistener, gridpopupmenu, editpopupmenu, buttonpopupmenu
 	def mousePressed(self, mouseevent):  # グリッドコントロールをクリックした時。
-		doc, menulistener = self.args
+		doc, menulistener, gridpopupmenu, editpopupmenu, buttonpopupmenu = self.args
 		name = mouseevent.Source.getModel().getPropertyValue("Name")
 		if name=="Grid1":  # グリッドコントロールの時。
-			gridpopupmenu = self.gridpopupmenu
 			gridcontrol = mouseevent.Source  # グリッドコントロールを取得。
 			if mouseevent.Buttons==MouseButton.LEFT and mouseevent.ClickCount==2:  # ダブルクリックの時。
 				selection = doc.getCurrentSelection()  # シート上で選択しているオブジェクトを取得。
@@ -193,7 +193,7 @@ class MouseListener(unohelper.Base, XMouseListener):
 			if mouseevent.Buttons==MouseButton.LEFT and mouseevent.ClickCount==2:  # ダブルクリックの時。テキストボックスコントロールでは右クリックはカスタマイズ出来ない。
 				editcontrol = mouseevent.Source  # テキストボックスコントロールを取得。
 				pos = Rectangle(mouseevent.X, mouseevent.Y, 0, 0)  # ポップアップメニューを表示させる起点。
-				self.editpopupmenu.execute(editcontrol.getPeer(), pos, PopupMenuDirection.EXECUTE_DEFAULT)  # ポップアップメニューを表示させる。引数は親ピア、位置、方向						
+				editpopupmenu.execute(editcontrol.getPeer(), pos, PopupMenuDirection.EXECUTE_DEFAULT)  # ポップアップメニューを表示させる。引数は親ピア、位置、方向						
 		elif name=="Button1":  # ボタンコントロールの時。
 			if mouseevent.PopupTrigger:  # 右クリックの時。
 				flg = False  # Undoメニューを表示させるフラグ。
@@ -202,7 +202,6 @@ class MouseListener(unohelper.Base, XMouseListener):
 					activesheetname = doc.getCurrentController().getActiveSheet().getName()
 					if activesheetname==cellcursor.getSpreadsheet().getName():  # Undoデータと同じシートの時。
 						flg = True
-				buttonpopupmenu = self.buttonpopupmenu
 				buttonpopupmenu.enableItem(1, flg)  # Undoメニューを表示する。
 				buttoncontrol = mouseevent.Source  # ボタンコントロールを取得。
 				pos = Rectangle(mouseevent.X, mouseevent.Y, 0, 0)  # ポップアップメニューを表示させる起点。
@@ -216,19 +215,21 @@ class MouseListener(unohelper.Base, XMouseListener):
 	def disposing(self, eventobject):
 		eventobject.Source.removeMouseListener(self)
 class MenuListener(unohelper.Base, XMenuListener):
-	def __init__(self):
+	def __init__(self):  # グリッドコントロールはこの時点でまだdialogに追加されていない。ピアも作成されていない。
 		self.rowdata = None
 		self.undo = None  # undo用データ。
+	def setDialog(self, dialog):  # グリッドコントロールとピアが作成されてから実行する。
+		peer = dialog.getPeer()  # ピアを取得。
+		toolkit = peer.getToolkit()  # ピアからツールキットを取得。 	
+		gridcontrol = dialog.getControl("Grid1")  # グリッドコントロールを取得。	
+		griddata = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModelを取得。		
+		self.args = dialog, peer, toolkit, gridcontrol, griddata  # dialogはCloseListener内で使うので最初に置かないといけない。
 	def itemHighlighted(self, menuevent):
 		pass
 	def itemSelected(self, menuevent):  # PopupMenuの項目がクリックされた時。どこのコントロールのメニューかを知る方法はない。
+		dialog, peer, toolkit, gridcontrol, griddata = self.args
 		cmd = menuevent.Source.getCommand(menuevent.MenuId)
-		dialog = self.dialog
-		peer = dialog.getPeer()  # ピアを取得。
-		toolkit = peer.getToolkit()  # ピアからツールキットを取得。 
-		gridcontrol = dialog.getControl("Grid1")  # グリッドコントロールを取得。
 		selectedrows = gridcontrol.getSelectedRows()  # 選択行インデックスのタプルを取得。
-		griddata = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModelを取得。
 		if cmd in ("cut", "copy", "pasteabove", "pastebelow", "delete"):  # グリッドコントロールのコンテクストメニュー。
 			if cmd=="cut":  # 選択行のデータを取得してその行を削除する。
 				self.rowdata = [griddata.getRowData(r) for r in selectedrows]  # 選択行のデータを取得。
@@ -246,10 +247,8 @@ class MenuListener(unohelper.Base, XMenuListener):
 					[griddata.removeRow(r) for r in selectedrows]  # 選択行を削除。
 		elif cmd in ("add", "restore", "sort"):  # ボタンコントロールのコンテクストメニュー。
 			if cmd=="add":
-				dialog = self.dialog  # ダイアログを取得。
 				t = dialog.getControl("Edit1").getText()
 				d = dialog.getControl("Edit2").getText()			
-				griddata = gridcontrol.getModel().getPropertyValue("GridDataModel")  # グリッドコントロールモデルからDefaultGridDataModelを取得。
 				if not selectedrows:  # 選択行がない時。
 					selectedrows = griddata.RowCount-1,  # 最終行インデックスを選択していることにする。
 				insertRows(gridcontrol, griddata, selectedrows, 1, ((t, d),))  # 選択行の下に行を挿入する。
@@ -279,6 +278,17 @@ Current: {}
 		pass   
 	def disposing(self, eventobject):
 		eventobject.Source.removeMenuListener(self)
+class GridSelectionListener(unohelper.Base, XGridSelectionListener):
+	def selectionChanged(self, gridselectionevent):
+		gridcontrol = gridselectionevent.Source
+		selectedrows = gridselectionevent.SelectedRowIndexes
+		if selectedrows:  # 選択行がある時。
+			rowdata = gridcontrol.getModel().getPropertyValue("GridDataModel").getRowData(gridselectionevent.SelectedRowIndexes[0])  # 選択行の最初の行のデータを取得。
+			dialog = gridcontrol.getContext()
+			dialog.getControl("Edit1").setText(rowdata[0])
+			dialog.getControl("Edit2").setText(rowdata[1])
+	def disposing(self, eventobject):
+		eventobject.Source.removeSelectionListener(self)	
 def insertRows(gridcontrol, griddata, selectedrows, position, datarows):  # positionは0の時は選択行の上に挿入、1で下に挿入。
 	c = len(datarows)  # 行数を取得。
 	griddata.insertRows(selectedrows[0]+position, ("", )*c, datarows)  # 行を挿入。
