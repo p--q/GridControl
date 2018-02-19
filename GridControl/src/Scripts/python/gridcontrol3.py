@@ -107,6 +107,9 @@ def createDialog(ctx, smgr, doc, flg):
 		dialogframe.addCloseListener(CloseListener(args))  # CloseListener。ノンモダルダイアログのリスナー削除用。
 	else:  # モダルダイアログにする。フレームに追加するとエラーになる。
 		dialog.execute()  
+# 		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
+# 		mouselistener.editpopupmenu.removeMenuListener(menulistener)
+# 		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)		
 		dialog.dispose()		
 def XWidth(props, m=0):  # 左隣のコントロールからPositionXを取得。mは間隔。
 	return props["PositionX"] + props["Width"] + m  	
@@ -122,7 +125,7 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		gridmodel = gridcontrol.getModel()  # グリッドコントロールモデルの取得。	
 		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
 		
-		doc.getSheets()["config"]
+# 		doc.getSheets()["config"]
 		
 		
 		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
