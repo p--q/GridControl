@@ -128,6 +128,7 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		gridmodel = gridcontrol.getModel()  # グリッドコントロールモデルの取得。	
 		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
 		
+		sheets = doc.getSheets()
 # 		doc.getSheets()["config"]
 		
 		
