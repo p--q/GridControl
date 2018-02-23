@@ -18,6 +18,7 @@ from com.sun.star.awt.MessageBoxType import QUERYBOX  # enum
 from com.sun.star.awt import MessageBoxButtons  # 定数
 from com.sun.star.awt import MessageBoxResults  # 定数
 from com.sun.star.awt.grid import XGridSelectionListener
+from com.sun.star.sheet import CellFlags  # 定数
 def macro(documentevent=None):  # 引数は文書のイベント駆動用。import pydevd; pydevd.settrace(stdoutToServer=True, stderrToServer=True)
 	ctx = XSCRIPTCONTEXT.getComponentContext()  # コンポーネントコンテクストの取得。
 	smgr = ctx.getServiceManager()  # サービスマネージャーの取得。
@@ -129,6 +130,22 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
 		
 		sheets = doc.getSheets()
+		configsheet = "config"
+		if not configsheet in sheets:
+			sheets.insertNewByName(configsheet, len(sheets))   # 新しいシートを挿入。同名のシートがあるとRuntimeExceptionがでる。
+		
+			
+		
+		
+		namedranges = doc.getPropertyValue("NamedRanges")  # ドキュメントのNamedRangesを取得。
+		if not "Grid1" in namedranges:  # 重複しているとエラーになる。
+			sheet = sheets["config"]
+			bottomcellrange = sheet[:, 0].queryContentCells(CellFlags.STRING)[-1] 
+
+			
+			
+			namedranges.addNewByName("Grid1", "A1+B1", celladdress, 0)  # 名前、式(相対アドレス)、原点となるセル、NamedRangeFlag
+		
 # 		doc.getSheets()["config"]
 		
 		
