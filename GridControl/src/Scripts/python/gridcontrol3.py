@@ -87,10 +87,12 @@ def createDialog(ctx, smgr, doc, flg):
 	column1.ColumnWidth = grid["Width"] - column0.ColumnWidth  #  列幅。列の合計がグリッドコントロールの幅に一致するようにする。
 	gridcolumn.addColumn(column1)  # 列を追加。	
 	griddata = gridmodel.getPropertyValue("GridDataModel")  # GridDataModel
+	datarows = getSavedGridRows(doc, "Grid1")  # グリッドコントロールの行をhistoryシートのragenameから取得する。	
+	if datarows:  # 行のリストが取得出来た時。
+		griddata.insertRows(0, ("",)*len(datarows), datarows)  # グリッドに行を挿入。
 	now = datetime.now()  # 現在の日時を取得。
 	d = now.date().isoformat()
 	t = now.time().isoformat().split(".")[0]
-	griddata.addRow(0, (t, d))  # グリッドに行を挿入。
 	textbox1, textbox2 = [textbox.copy() for dummy in range(2)]
 	textbox1["Width"] = 34
 	textbox1["Text"] = t
@@ -111,6 +113,7 @@ def createDialog(ctx, smgr, doc, flg):
 		dialogframe.addCloseListener(CloseListener(args))  # CloseListener。ノンモダルダイアログのリスナー削除用。
 	else:  # モダルダイアログにする。フレームに追加するとエラーになる。
 		dialog.execute()  
+		saveGridRows(doc, gridcontrol1, "Grid1")
 		mouselistener.gridpopupmenu.removeMenuListener(menulistener)
 		mouselistener.editpopupmenu.removeMenuListener(menulistener)
 		mouselistener.buttonpopupmenu.removeMenuListener(menulistener)		
@@ -127,31 +130,7 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		doc, menulistener, gridpopupmenu, editpopupmenu, buttonpopupmenu = mouselistener.args
 		dialog = menulistener.args[0]
 		gridcontrol = dialog.getControl("Grid1")	
-		
-		
-		griddatamodel = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModel
-		datarows = [griddatamodel.getRowData(i) for i in range(griddatamodel.RowCount)]  # グリッドコントロールの行のリストを取得。
-		namedranges = doc.getPropertyValue("NamedRanges")  # ドキュメントのNamedRangesを取得。
-		rangename = "Grid1"
-		if not rangename in namedranges:  # Grid1という名前がない時。名前は重複しているとエラーになる。
-			sheets = doc.getSheets()  # シートコレクションを取得。
-			sheetname = "history"  # 履歴シート名。
-			if not sheetname in sheets:  # 履歴シートがない時。
-				sheets.insertNewByName(sheetname, len(sheets))   # 履歴シートを挿入。同名のシートがあるとRuntimeExceptionがでる。
-			sheet = sheets[sheetname]  # 履歴シートを取得。
-			emptyranges = sheet[:, :2].queryEmptyCells()  # 2列目までの最初の空セル範囲コレクションを取得。
-			if len(emptyranges):  # セル範囲コレクションが取得出来た時。
-				emptyrange = emptyranges[0]  # 最初のセル範囲を取得。
-				emptyrange[0, 0].setString(rangename)
-				namedranges.addNewByName(rangename, emptyrange[0, 1].getPropertyValue("AbsoluteName"), emptyrange[0, 1].getCellAddress(), 0)  # 2列目のセルに名前を付ける。名前、式(相対アドレス)、原点となるセル、NamedRangeFlag
-
-
-		namedranges[rangename].getReferencePosition().setString(json.dumps(datarows,  ensure_ascii=False))
-				
-				
-
-		
-		
+		saveGridRows(doc, gridcontrol, "Grid1")
 		gridpopupmenu.removeMenuListener(menulistener)
 		editpopupmenu.removeMenuListener(menulistener)
 		buttonpopupmenu.removeMenuListener(menulistener)
@@ -164,6 +143,33 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		pass
 	def disposing(self, eventobject):  
 		eventobject.Source.removeCloseListener(self)
+def saveGridRows(doc, gridcontrol, rangename):  # グリッドコントロールの行をhistoryシートのragenameに保存する。		
+	griddatamodel = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModel
+	datarows = [griddatamodel.getRowData(i) for i in range(griddatamodel.RowCount)]  # グリッドコントロールの行のリストを取得。
+	namedranges = doc.getPropertyValue("NamedRanges")  # ドキュメントのNamedRangesを取得。
+	if not rangename in namedranges:  # 名前がない時。名前は重複しているとエラーになる。
+		sheets = doc.getSheets()  # シートコレクションを取得。
+		sheetname = "history"  # 履歴シート名。
+		if not sheetname in sheets:  # 履歴シートがない時。
+			sheets.insertNewByName(sheetname, len(sheets))   # 履歴シートを挿入。同名のシートがあるとRuntimeExceptionがでる。
+		sheet = sheets[sheetname]  # 履歴シートを取得。
+		sheet.setPropertyValue("IsVisible", False)  # 非表示シートにする。
+		emptyranges = sheet[:, :2].queryEmptyCells()  # 2列目までの最初の空セル範囲コレクションを取得。
+		if len(emptyranges):  # セル範囲コレクションが取得出来た時。
+			emptyrange = emptyranges[0]  # 最初のセル範囲を取得。
+			emptyrange[0, 0].setString(rangename)
+			namedranges.addNewByName(rangename, emptyrange[0, 1].getPropertyValue("AbsoluteName"), emptyrange[0, 1].getCellAddress(), 0)  # 2列目のセルに名前を付ける。名前、式(相対アドレス)、原点となるセル、NamedRangeFlag
+	namedranges[rangename].getReferredCells().setString(json.dumps(datarows,  ensure_ascii=False))  # Grid1という名前のセルに文字列でリストを出力する。
+def getSavedGridRows(doc, rangename):  # グリッドコントロールの行をhistoryシートのragenameから取得する。	
+	namedranges = doc.getPropertyValue("NamedRanges")  # ドキュメントのNamedRangesを取得。	
+	if rangename in namedranges:  # 名前がある時。
+		txt = namedranges[rangename].getReferredCells().getString()  # 名前が参照しているセルから文字列を取得。
+		if txt:
+			try:
+				return json.loads(txt)
+			except json.JSONDecodeError:
+				pass
+	return None  # 保存された行が取得できない時はNoneを返す。
 class MouseListener(unohelper.Base, XMouseListener):  
 	def __init__(self, doc, menulistener, createMenu): 
 		items = ("~Cut", 0, {"setCommand": "cut"}),\
