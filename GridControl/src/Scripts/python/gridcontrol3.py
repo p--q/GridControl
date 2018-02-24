@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import unohelper  # オートメーションには必須(必須なのはuno)。
 from datetime import datetime
+import json
 from com.sun.star.accessibility import AccessibleRole  # 定数
 from com.sun.star.awt import XActionListener
 from com.sun.star.awt import XEnhancedMouseClickHandler
@@ -126,27 +127,29 @@ class CloseListener(unohelper.Base, XCloseListener):  # ノンモダルダイア
 		doc, menulistener, gridpopupmenu, editpopupmenu, buttonpopupmenu = mouselistener.args
 		dialog = menulistener.args[0]
 		gridcontrol = dialog.getControl("Grid1")	
-		gridmodel = gridcontrol.getModel()  # グリッドコントロールモデルの取得。	
-		datarows = [gridmodel.getRowData(i) for i in range(gridmodel.RowCount)]
-		
-		sheets = doc.getSheets()
-		configsheet = "config"
-		if not configsheet in sheets:
-			sheets.insertNewByName(configsheet, len(sheets))   # 新しいシートを挿入。同名のシートがあるとRuntimeExceptionがでる。
-		
-			
 		
 		
+		griddatamodel = gridcontrol.getModel().getPropertyValue("GridDataModel")  # GridDataModel
+		datarows = [griddatamodel.getRowData(i) for i in range(griddatamodel.RowCount)]  # グリッドコントロールの行のリストを取得。
 		namedranges = doc.getPropertyValue("NamedRanges")  # ドキュメントのNamedRangesを取得。
-		if not "Grid1" in namedranges:  # 重複しているとエラーになる。
-			sheet = sheets["config"]
-			bottomcellrange = sheet[:, 0].queryContentCells(CellFlags.STRING)[-1] 
+		rangename = "Grid1"
+		if not rangename in namedranges:  # Grid1という名前がない時。名前は重複しているとエラーになる。
+			sheets = doc.getSheets()  # シートコレクションを取得。
+			sheetname = "history"  # 履歴シート名。
+			if not sheetname in sheets:  # 履歴シートがない時。
+				sheets.insertNewByName(sheetname, len(sheets))   # 履歴シートを挿入。同名のシートがあるとRuntimeExceptionがでる。
+			sheet = sheets[sheetname]  # 履歴シートを取得。
+			emptyranges = sheet[:, :2].queryEmptyCells()  # 2列目までの最初の空セル範囲コレクションを取得。
+			if len(emptyranges):  # セル範囲コレクションが取得出来た時。
+				emptyrange = emptyranges[0]  # 最初のセル範囲を取得。
+				emptyrange[0, 0].setString(rangename)
+				namedranges.addNewByName(rangename, emptyrange[0, 1].getPropertyValue("AbsoluteName"), emptyrange[0, 1].getCellAddress(), 0)  # 2列目のセルに名前を付ける。名前、式(相対アドレス)、原点となるセル、NamedRangeFlag
 
-			
-			
-			namedranges.addNewByName("Grid1", "A1+B1", celladdress, 0)  # 名前、式(相対アドレス)、原点となるセル、NamedRangeFlag
-		
-# 		doc.getSheets()["config"]
+
+		namedranges[rangename].getReferencePosition().setString(json.dumps(datarows,  ensure_ascii=False))
+				
+				
+
 		
 		
 		gridpopupmenu.removeMenuListener(menulistener)
