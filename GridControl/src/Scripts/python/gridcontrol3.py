@@ -88,11 +88,13 @@ def createDialog(ctx, smgr, doc, flg):
 	gridcolumn.addColumn(column1)  # 列を追加。	
 	griddata = gridmodel.getPropertyValue("GridDataModel")  # GridDataModel
 	datarows = getSavedGridRows(doc, "Grid1")  # グリッドコントロールの行をhistoryシートのragenameから取得する。	
-	if datarows:  # 行のリストが取得出来た時。
-		griddata.insertRows(0, ("",)*len(datarows), datarows)  # グリッドに行を挿入。
 	now = datetime.now()  # 現在の日時を取得。
 	d = now.date().isoformat()
-	t = now.time().isoformat().split(".")[0]
+	t = now.time().isoformat().split(".")[0]	
+	if datarows:  # 行のリストが取得出来た時。
+		griddata.insertRows(0, ("",)*len(datarows), datarows)  # グリッドに行を挿入。
+	else:
+		griddata.addRow("", (t, d))  # 現在の行を入れる。
 	textbox1, textbox2 = [textbox.copy() for dummy in range(2)]
 	textbox1["Width"] = 34
 	textbox1["Text"] = t
@@ -306,9 +308,12 @@ Current: {}
 	def disposing(self, eventobject):
 		eventobject.Source.removeMenuListener(self)
 class GridSelectionListener(unohelper.Base, XGridSelectionListener):
-	def selectionChanged(self, gridselectionevent):
+	def selectionChanged(self, gridselectionevent):  # 行を追加した時も発火する。
+		
+# 		import pydevd; pydevd.settrace(stdoutToServer=True, stderrToServer=True)
+		
 		gridcontrol = gridselectionevent.Source
-		selectedrows = gridselectionevent.SelectedRowIndexes
+		selectedrows = gridselectionevent.SelectedRowIndexes  # 行がないグリッドコントロールに行が追加されたときは負の値が入ってくる。
 		if selectedrows:  # 選択行がある時。
 			rowdata = gridcontrol.getModel().getPropertyValue("GridDataModel").getRowData(gridselectionevent.SelectedRowIndexes[0])  # 選択行の最初の行のデータを取得。
 			dialog = gridcontrol.getContext()
