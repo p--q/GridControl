@@ -309,9 +309,6 @@ Current: {}
 		eventobject.Source.removeMenuListener(self)
 class GridSelectionListener(unohelper.Base, XGridSelectionListener):
 	def selectionChanged(self, gridselectionevent):  # 行を追加した時も発火する。
-		
-# 		import pydevd; pydevd.settrace(stdoutToServer=True, stderrToServer=True)
-		
 		gridcontrol = gridselectionevent.Source
 		selectedrows = gridselectionevent.SelectedRowIndexes  # 行がないグリッドコントロールに行が追加されたときは負の値が入ってくる。
 		if selectedrows:  # 選択行がある時。
